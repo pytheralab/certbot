@@ -1,0 +1,63 @@
+name: Obtain certs
+
+# Controls when the workflow will run.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/*.yml
+  # Triggers the workflow on a timer. This particular timer runs on the first day of the month. 
+  # CertBot certs are renewable every 30 days, so this should work for that purpose.
+  schedule:
+    - cron:  '0 0 * */3 *'
+  # Allows you to run this workflow manually from the Actions tab.
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel.
+jobs:
+  obtain:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      -
+        name: Pull latest
+        run : |
+          git fetch
+          git reset --hard origin/main
+      -
+        name: Obtain certs
+        run: |
+          echo $ENCRYPT_PASS >> ./encryptpass
+          docker run \
+            -v ./certs:/certs \
+            -v ./encryptpass:/encryptpass \
+            -e CERTBOT_DOMAIN=*.pythera.ai,pythera.ai\
+            -e CERTBOT_EMAIL=${{ secrets.EMAIL }} \
+            -e CERTBOT_CLOUDFLARE_TOKEN=${{ secrets.CLOUDFLARE_TOKEN }} \
+            -e CERTBOT_ENCRYPT_PASS_FILE=/encryptpass \
+          hieupth/certbot
+          docker run \
+            -v ./certs:/certs \
+            -v ./encryptpass:/encryptpass \
+            -e CERTBOT_DOMAIN=*.demo.pythera.ai,demo.pythera.ai \
+            -e CERTBOT_EMAIL=${{ secrets.EMAIL }} \
+            -e CERTBOT_CLOUDFLARE_TOKEN=${{ secrets.CLOUDFLARE_TOKEN }} \
+            -e CERTBOT_ENCRYPT_PASS_FILE=/encryptpass \
+          hieupth/certbot
+          rm -rf ./encryptpass
+        env:
+          ENCRYPT_PASS: ${{secrets.ENCRYPT_PASS}}
+      -
+        name: Commit and push
+        run: |
+          sudo chmod -R 777 ./certs
+          git config --global user.name "hieupth"
+          git config --global user.email "64821726+hieupth@users.noreply.github.com"    
+          git add -A
+          git commit -m "chore: obtain certs"
+          git push
